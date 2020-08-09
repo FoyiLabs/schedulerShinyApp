@@ -7,13 +7,13 @@ library(ROI.plugin.glpk)
 ui <- dashboardPage(skin = "blue", title = "Shift scheduler",
       dashboardHeader(title = h4("Shift scheduler"), 
                       
-                      tags$li(a(href = '',
+                      tags$li(a(href = 'https://github.com/SidharthMacherla/schedulerShinyApp/blob/master/schedulerShinyApp.R',
                                 icon("github"), title = "Go to source code"),
                               class = "dropdown"),
-                      tags$li(a(href = '',
+                      tags$li(a(href = 'https://www.foyi.co.nz/posts/howtoguides/staffscheduler/',
                                 icon("book"), title = "Go to documentation"),
                               class = "dropdown"),
-                      tags$li(a(href = '',
+                      tags$li(a(href = 'https://github.com/SidharthMacherla/schedulerShinyApp/blob/master/LICENSE',
                                 icon("certificate"), title = "View license"),
                               class = "dropdown")
       ),#ends dashboard header  
@@ -66,11 +66,11 @@ ui <- dashboardPage(skin = "blue", title = "Shift scheduler",
                               textOutput('errorMaxDaysPerWeek'),
                               hr(),
                               
-                              h5(strong("What is the minimum staffing requirement per day?")),
-                              numericInput(inputId = "minStaffPerDay", label = NULL, 
+                              h5(strong("What is the minimum staffing requirement per shift?")),
+                              numericInput(inputId = "minStaffPerShift", label = NULL, 
                                            value = 1, step = 1, width = '25%'),
                               #error message
-                              textOutput('errorMinStaffPerDay')
+                              textOutput('errorMinStaffPerShift')
                               ),#ends 1st constraints box
                           
                           box(title = NULL, status = "primary", solidHeader = TRUE, width = 6,
@@ -127,27 +127,34 @@ server <- function(input, output, session) {
   #Server Side: Set default global variables
   #&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&& 
   globals$shiftPrefRaw <- data.frame(
-                          "StaffId" = c(1, 1, 1, 2, 2, 2, 3, 3, 3, 4, 4, 4, 5, 5, 5),
+                          "StaffId" = c(1, 1, 1, 2, 2, 2, 3, 3, 3, 4, 4, 4, 5, 5, 5, 6, 6, 6),
                           "Shift" = c(1, 2, 3, 1, 2, 3, 
                                       1, 2, 3, 1, 2, 3, 
-                                      1, 2, 3),
-                          "Monday" = c(1,1,0,1,1,0,1,0,1,1,0,0,1,1,1),
-                          "Tuesday" = c(1,1,0,1,1,0,1,0,1,1,0,0,1,1,1),
-                          "Wednesday" = c(1,1,0,1,1,0,1,0,1,1,0,0,1,1,1),
-                          "Thursday" = c(1,1,0,1,1,0,1,0,1,1,1,1,1,1,1),
-                          "Friday" = c(1,1,0,1,0,0,1,0,1,1,1,1,1,1,1),
-                          "Saturday" = c(1,1,0,1,0,0,1,0,1,1,1,1,1,1,1),
-                          "Sunday" = c(1,1,0,1,1,1,1,0,1,1,1,1,1,1,1)
+                                      1, 2, 3, 1, 2, 3),
+                          "Monday" = c(1,1,0,1,1,0,1,0,1,1,0,0,1,1,1,1,1,1),
+                          "Tuesday" = c(1,1,0,1,1,0,1,0,1,1,0,0,1,1,1,1,1,1),
+                          "Wednesday" = c(1,1,0,1,1,0,1,0,1,1,0,0,1,1,1,1,1,1),
+                          "Thursday" = c(1,1,0,1,1,0,1,0,1,1,1,1,1,1,1,1,1,1),
+                          "Friday" = c(1,1,0,1,0,0,1,0,1,1,1,1,1,1,1,1,1,1),
+                          "Saturday" = c(1,1,0,1,0,0,1,0,1,1,1,1,1,1,1,1,1,1),
+                          "Sunday" = c(1,1,0,1,1,1,1,0,1,1,1,1,1,1,1,1,1,1)
   )
   
   globals$staffSkillRaw <- data.frame(
-                          "staffId" = c(1, 1, 1, 
-                                        2, 2, 3, 
-                                        3, 4, 4, 5, 
-                                        5, 5),
-                          "skill" = c("skill1", "skill2", "skill3", "skill1", 
-                                      "skill3", "skill2", "skill3", "skill1", 
-                                      "skill3", "skill1", "skill2", "skill3")
+                          "staffId" = c(1, 1, 1,
+                                        2, 2, 2,
+                                        3, 3, 3,
+                                        4, 4, 4,
+                                        5, 5, 5,
+                                        6, 6, 6
+                                        ),
+                          "skill" = c("skill1", "skill2", "skill3", 
+                                      "skill1", "skill2", "skill3", 
+                                      "skill1", "skill2", "skill3",
+                                      "skill1", "skill2", "skill3",
+                                      "skill1", "skill2", "skill3",
+                                      "skill1", "skill2", "skill3"
+                                      )
   )
 
   globals$numOfStaff <- 5
@@ -248,20 +255,19 @@ server <- function(input, output, session) {
                                             k = 1:numOfShifts, type = "binary") %>%
                            
                          #set objective function
-                         ompr::set_objective(sum_expr(checkPref(staff = i, day = j, shift = k) * x[i, j, k], 
-                                                      i = 1:numOfStaff, j = 1:numOfDays, k = 1:numOfShifts)) %>%
+                         ompr::set_objective(sum_expr(checkPref(staff = i, day = j, shift = k) * x[i, j, k], i = 1:numOfStaff, 
+                                                      j = 1:numOfDays, k = 1:numOfShifts),sense = "max") %>%
+                          
+                         #each staff can work a maximum of 1 shift a day
+                         ompr::add_constraint(sum_expr(x[i,j,k], k = 1:numOfShifts) <= input$maxShiftsPerDay, 
+                                              i = 1:numOfStaff, j =  1:numOfDays) %>%
                    
-                         #add constraint for min staff scheduled per day
-                         ompr::add_constraint(sum_expr(x[i,j,k], i = 1:numOfStaff) >= input$minStaffPerDay, 
-                                        j = 1:numOfDays, k = 1:numOfShifts) %>%
+                         #each shift each day must have atleast 1 staff
+                         ompr::add_constraint(sum_expr(x[i,j,k], i = 1:numOfStaff) >= input$minStaffPerShift, j =  1:numOfDays, k = 1:numOfShifts) %>%      
                    
-                         #add constraint for max shifts scheduled per day
-                         ompr::add_constraint(sum_expr(x[i,j,k], k = 1:numOfShifts) <= input$maxShiftsPerDay,  
-                                              j = 1:numOfDays, i = 1:numOfStaff) %>%
-                   
-                         #add constraint for no: of work days per week
-                         ompr::add_constraint(sum_expr(x[i,j,k], j =  1:numOfDays) <= input$maxDaysPerWeek, 
-                                              i = 1:numOfStaff, k = 1:numOfShifts)
+                         #each staff can work a maximum of 5 days a week
+                         ompr::add_constraint(sum_expr(x[i,j,k], j =  1:numOfDays, k = 1:numOfShifts) <= input$maxDaysPerWeek, 
+                                              i = 1:numOfStaff) 
                          
                          #add skill based constraints
                          skillList <- input$skillsPerShift
@@ -360,10 +366,10 @@ server <- function(input, output, session) {
                })#ends observe event
   
   #error message for min staffing constraint
-  observeEvent(input$minStaffPerDay,
+  observeEvent(input$minStaffPerShift,
                {
-                 output$errorMinStaffPerDay <- renderText({
-                   if(input$minStaffPerDay < 0 | input$minStaffPerDay > globals$numOfStaff)
+                 output$errorMinStaffPerShift <- renderText({
+                   if(input$minStaffPerShift < 0 | input$minStaffPerShift > globals$numOfStaff)
                    {
                      stop(safeError(paste("Minimum staffing must be atleast 0 and never more than available staff")))
                    }
